@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: media-promotion-bot-free
+    name: media-bot
     env: python
     plan: free
     buildCommand: "pip install -r requirements.txt"
@@ -10,15 +10,9 @@ services:
         value: "8415474087:AAEDtwjvgogXfvpMzARe875svIEkSSDdNXk"
       - key: DATABASE_URL
         fromDatabase:
-          name: media-promotion-db
+          name: media-db
           property: connectionString
-      - key: RENDER_SERVICE_URL
-        value: "https://media-promotion-bot-free.onrender.com"
-      - key: PYTHON_VERSION
-        value: "3.11.0"
 
 databases:
-  - name: media-promotion-db
+  - name: media-db
     plan: free
-    databaseName: media_promotion
-    user: media_promotion_user
