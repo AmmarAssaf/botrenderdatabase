@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: media-promotion-bot-free
+    name: telegram-bot-db-free
     env: python
     plan: free
     buildCommand: "pip install -r requirements.txt"
@@ -8,9 +8,9 @@ services:
     envVars:
       - key: DATABASE_URL
         fromDatabase:
-          name: media-promotion-db
+          name: telegram-bot-db
           property: connectionString
 
 databases:
-  - name: media-promotion-db
+  - name: telegram-bot-db
     plan: free
