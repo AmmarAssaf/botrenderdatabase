@@ -10,7 +10,15 @@ services:
         value: "8415474087:AAEDtwjvgogXfvpMzARe875svIEkSSDdNXk"
       - key: DATABASE_URL
         fromDatabase:
-          name: telegram-bot-db
+          name: media-promotion-db
           property: connectionString
-      - key: Internal Database URL
-        value: postgresql://botuser:wvFYbKZY2fLHzxuMIGuIMAcV9ZZTm3dS@dpg-d477doali9vc738hh5fg-a/telegrambotdb_r7m4
+      - key: RENDER_SERVICE_URL
+        value: "https://media-promotion-bot-free.onrender.com"
+      - key: PYTHON_VERSION
+        value: "3.11.0"  # إصدار متوافق مع جميع الحزم
+
+databases:
+  - name: media-promotion-db
+    plan: free
+    databaseName: media_promotion
+    user: media_promotion_user
