@@ -1,17 +1,14 @@
 services:
   - type: web
-    name: simple-name-db
+    name: ammar-db-test
     env: python
     plan: free
-    pythonVersion: "3.11.0"
     buildCommand: "pip install -r requirements.txt"
     startCommand: "python app.py"
     envVars:
       - key: DATABASE_URL
         fromDatabase:
-          name: names-db
+          name: telegram-bot-db
           property: connectionString
 
-databases:
-  - name: names-db
-    plan: free
+# لاحظ: لا نضيف قسم databases لأن القاعدة موجودة مسبقاً
