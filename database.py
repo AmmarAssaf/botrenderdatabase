@@ -1,8 +1,7 @@
 import os
+import psycopg2
+from psycopg2.extras import RealDictCursor
 import logging
-import pg8000
-from pg8000 import Connection, Cursor
-from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -13,34 +12,13 @@ class Database:
     def get_connection(self):
         """إنشاء اتصال بقاعدة البيانات"""
         try:
-            # تحويل DATABASE_URL إلى شكل يتعرف عليه pg8000
-            # مثال: postgresql://user:pass@host:port/dbname
-            if self.database_url.startswith('postgresql://'):
-                # إزالة البادئة
-                conn_str = self.database_url.replace('postgresql://', '')
-                # تقسيم الجزء user:pass@host:port/dbname
-                parts = conn_str.split('@')
-                user_pass = parts[0].split(':')
-                host_port_db = parts[1].split('/')
-                host_port = host_port_db[0].split(':')
-                
-                user = user_pass[0]
-                password = user_pass[1]
-                host = host_port[0]
-                port = int(host_port[1]) if len(host_port) > 1 else 5432
-                database = host_port_db[1]
-                
-                conn = pg8000.connect(
-                    user=user,
-                    password=password,
-                    host=host,
-                    port=port,
-                    database=database
-                )
-                return conn
-            else:
-                logger.error("صيغة DATABASE_URL غير معروفة")
-                return None
+            # تحويل connection string ليكون متوافقاً مع Render
+            conn_str = self.database_url
+            if conn_str.startswith('postgres://'):
+                conn_str = conn_str.replace('postgres://', 'postgresql://', 1)
+            
+            conn = psycopg2.connect(conn_str, sslmode='require')
+            return conn
         except Exception as e:
             logger.error(f"خطأ في الاتصال بقاعدة البيانات: {e}")
             return None
@@ -73,8 +51,7 @@ class Database:
                             user_id BIGINT NOT NULL,
                             activity_type VARCHAR(50) NOT NULL,
                             activity_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                            details TEXT,
-                            FOREIGN KEY (user_id) REFERENCES users(user_id)
+                            details TEXT
                         );
                     """)
                     
@@ -100,7 +77,6 @@ class Database:
             conn = self.get_connection()
             if conn:
                 with conn.cursor() as cur:
-                    # إدخال المستخدم أو تحديثه إذا كان موجودًا
                     cur.execute("""
                         INSERT INTO users 
                         (user_id, telegram_username, full_name, phone_number, email) 
@@ -124,10 +100,11 @@ class Database:
                     user_id = result[0] if result else None
                     
                     # تسجيل النشاط
-                    cur.execute("""
-                        INSERT INTO user_activity (user_id, activity_type, details)
-                        VALUES (%s, %s, %s)
-                    """, (user_data['user_id'], 'registration', 'تم تسجيل المستخدم الجديد'))
+                    if user_id:
+                        cur.execute("""
+                            INSERT INTO user_activity (user_id, activity_type, details)
+                            VALUES (%s, %s, %s)
+                        """, (user_data['user_id'], 'registration', 'تم تسجيل المستخدم الجديد'))
                     
                 conn.commit()
                 conn.close()
@@ -143,19 +120,11 @@ class Database:
         try:
             conn = self.get_connection()
             if conn:
-                with conn.cursor() as cur:
-                    cur.execute("""
-                        SELECT id, user_id, telegram_username, full_name, phone_number, email, 
-                               registration_date, status, last_activity
-                        FROM users WHERE user_id = %s
-                    """, (user_id,))
-                    row = cur.fetchone()
-                    if row:
-                        columns = ['id', 'user_id', 'telegram_username', 'full_name', 'phone_number', 
-                                  'email', 'registration_date', 'status', 'last_activity']
-                        user = dict(zip(columns, row))
-                        return user
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    cur.execute("SELECT * FROM users WHERE user_id = %s", (user_id,))
+                    user = cur.fetchone()
                 conn.close()
+                return dict(user) if user else None
             return None
         except Exception as e:
             logger.error(f"❌ خطأ في جلب بيانات المستخدم: {e}")
@@ -166,18 +135,11 @@ class Database:
         try:
             conn = self.get_connection()
             if conn:
-                with conn.cursor() as cur:
-                    cur.execute("""
-                        SELECT id, user_id, telegram_username, full_name, phone_number, email, 
-                               registration_date, status, last_activity
-                        FROM users ORDER BY registration_date DESC
-                    """)
-                    rows = cur.fetchall()
-                    columns = ['id', 'user_id', 'telegram_username', 'full_name', 'phone_number', 
-                              'email', 'registration_date', 'status', 'last_activity']
-                    users = [dict(zip(columns, row)) for row in rows]
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    cur.execute("SELECT * FROM users ORDER BY registration_date DESC")
+                    users = cur.fetchall()
                 conn.close()
-                return users
+                return [dict(user) for user in users]
             return []
         except Exception as e:
             logger.error(f"❌ خطأ في جلب جميع المستخدمين: {e}")
@@ -209,7 +171,7 @@ class Database:
                         VALUES (%s, %s, %s)
                     """, (user_id, activity_type, details))
                     
-                    # تحديث وقت النشاط الأخير
+                    # تحديث وقت النشاط الأخير في جدول المستخدمين
                     cur.execute("""
                         UPDATE users SET last_activity = CURRENT_TIMESTAMP 
                         WHERE user_id = %s
