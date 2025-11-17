@@ -1,16 +1,16 @@
 services:
   - type: web
-    name: telegram-bot-db-free
+    name: simple-name-db
     env: python
     plan: free
     buildCommand: "pip install -r requirements.txt"
-    startCommand: "python simple_demo.py"
+    startCommand: "python app.py"
     envVars:
       - key: DATABASE_URL
         fromDatabase:
-          name: telegram-bot-db
+          name: names-db
           property: connectionString
 
 databases:
-  - name: telegram-bot-db
+  - name: names-db
     plan: free
