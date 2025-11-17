@@ -1,13 +1,13 @@
 """
 نظام تسجيل المستخدمين - النسخة الكاملة
-يعمل مع قاعدة بيانات Render PostgreSQL باستخدام pg8000
+يعمل مع قاعدة بيانات Render PostgreSQL
 """
 
 import os
 import logging
 import json
 from datetime import datetime
-from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ConversationHandler, CallbackContext, CallbackQueryHandler
 from flask import Flask, jsonify
 import threading
@@ -32,18 +32,29 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "🤖 نظام التسجيل يعمل بنجاح مع قاعدة البيانات (pg8000)!"
-
-@app.route('/ping')
-def ping():
-    return "pong"
+    return """
+    <html>
+        <head>
+            <title>نظام التسجيل - مؤسسة الترويج الإعلامي</title>
+            <meta charset="utf-8">
+        </head>
+        <body>
+            <div style="text-align: center; padding: 50px;">
+                <h1>🤖 نظام التسجيل يعمل بنجاح</h1>
+                <p>مؤسسة الترويج الإعلامي</p>
+                <p><a href="/health">الحالة</a> | <a href="/stats">الإحصائيات</a></p>
+            </div>
+        </body>
+    </html>
+    """
 
 @app.route('/health')
 def health():
+    db_status = "connected" if db.get_connection() else "disconnected"
     return jsonify({
         "status": "healthy",
-        "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-        "database": "connected" if db.get_connection() else "disconnected"
+        "database": db_status,
+        "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     })
 
 @app.route('/stats')
@@ -51,24 +62,9 @@ def stats():
     users_count = db.get_users_count()
     return jsonify({
         "total_users": users_count,
+        "system": "Media Promotion Bot",
         "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     })
-
-@app.route('/users')
-def users_list():
-    """عرض قائمة المستخدمين (لأغراض الإدارة)"""
-    users = db.get_all_users()
-    users_data = []
-    for user in users:
-        users_data.append({
-            "user_id": user['user_id'],
-            "full_name": user['full_name'],
-            "phone_number": user['phone_number'],
-            "email": user['email'],
-            "registration_date": user['registration_date'].strftime('%Y-%m-%d %H:%M:%S'),
-            "status": user['status']
-        })
-    return jsonify(users_data)
 
 def run_flask():
     app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)
@@ -131,7 +127,13 @@ async def get_phone(update: Update, context: CallbackContext) -> int:
         await update.message.reply_text("❌ رقم الهاتف غير صحيح! الرجاء إدخال رقم صالح.")
         return PHONE
     
-    context.user_data['phone_number'] = f"+966{phone}"  # افتراضي السعودية
+    # تنسيق رقم الهاتف
+    if phone.startswith('0'):
+        phone = '+966' + phone[1:]
+    else:
+        phone = '+966' + phone
+    
+    context.user_data['phone_number'] = phone
     
     await update.message.reply_text(
         f"✅ تم حفظ رقم الهاتف\n\n"
@@ -168,7 +170,7 @@ async def show_confirmation(update: Update, context: CallbackContext) -> int:
     
     keyboard = [
         [InlineKeyboardButton("✅ نعم، متابعة", callback_data="confirm_yes")],
-        [InlineKeyboardButton("❌ إلغاء", callback_data="confirm_no")]
+        [InlineKeyboardButton("❌ إعادة التسجيل", callback_data="confirm_no")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
@@ -186,10 +188,10 @@ async def handle_confirmation(update: Update, context: CallbackContext) -> int:
             user_data = context.user_data
             user_id = query.from_user.id
             
-            # حفظ البيانات
-            db_user_id = db.add_user(user_data)
+            # حفظ البيانات في قاعدة البيانات
+            db_result = db.add_user(user_data)
             
-            if db_user_id:
+            if db_result:
                 await query.message.reply_text(
                     f"🎉 **تم التسجيل بنجاح!** ✅\n\n"
                     f"📊 **بياناتك:**\n"
@@ -202,13 +204,14 @@ async def handle_confirmation(update: Update, context: CallbackContext) -> int:
                 )
                 logger.info(f"تم تسجيل مستخدم جديد: {user_id}")
             else:
-                await query.message.reply_text("❌ حدث خطأ في حفظ البيانات في قاعدة البيانات.")
-            
+                await query.message.reply_text("❌ حدث خطأ في حفظ البيانات في النظام.")
+                
         except Exception as e:
             logger.error(f"خطأ في حفظ البيانات: {e}")
             await query.message.reply_text("❌ حدث خطأ في حفظ البيانات.")
     else:
-        await query.message.reply_text("❌ تم إلغاء التسجيل")
+        await query.message.reply_text("🔄 لنبدأ التسجيل من جديد:\n\nما هو اسمك الكامل؟")
+        return NAME
     
     return ConversationHandler.END
 
@@ -217,25 +220,26 @@ async def profile(update: Update, context: CallbackContext):
     try:
         user_id = update.effective_user.id
         
-        user_profile = db.get_user(user_id)
-        if user_profile:
+        user_data = db.get_user(user_id)
+        if user_data:
             message = f"""
 📋 **ملفك الشخصي**
 
 👤 **المعلومات:**
-• الاسم: {user_profile['full_name']}
-• الهاتف: {user_profile['phone_number']}
-• البريد: {user_profile['email']}
-• تاريخ التسجيل: {user_profile['registration_date'].strftime('%Y-%m-%d %H:%M:%S')}
-• الحالة: {user_profile['status']}
+• الاسم: {user_data['full_name']}
+• الهاتف: {user_data['phone_number']}
+• البريد: {user_data['email']}
+• اسم المستخدم: @{user_data['telegram_username'] or 'غير متوفر'}
+• تاريخ التسجيل: {user_data['registration_date'].strftime('%Y-%m-%d %H:%M:%S')}
 
-💼 **آخر نشاط:** {user_profile['last_activity'].strftime('%Y-%m-%d %H:%M:%S')}
+💼 **الحالة:** ✅ {user_data['status']}
 """
             await update.message.reply_text(message)
         else:
             await update.message.reply_text("❌ لم يتم العثور على ملفك الشخصي. استخدم /start للتسجيل.")
             
     except Exception as e:
+        logger.error(f"خطأ في عرض الملف: {e}")
         await update.message.reply_text("❌ حدث خطأ في عرض الملف")
 
 async def stats(update: Update, context: CallbackContext):
@@ -249,43 +253,23 @@ async def stats(update: Update, context: CallbackContext):
 👥 **المستخدمين:**
 • إجمالي المسجلين: {total_users}
 
-🚀 **قاعدة البيانات:** ✅ نشطة
+🗃️ **التخزين:** قاعدة بيانات PostgreSQL
+🚀 **الحالة:** نشط ✅
 """
         await update.message.reply_text(message)
         
     except Exception as e:
+        logger.error(f"خطأ في عرض الإحصائيات: {e}")
         await update.message.reply_text("❌ حدث خطأ في عرض الإحصائيات")
-
-async def admin_stats(update: Update, context: CallbackContext):
-    """إحصائيات للمشرفين"""
-    try:
-        user_id = update.effective_user.id
-        # يمكنك إضافة تحقق من أن user_id هو المشرف
-        
-        total_users = db.get_users_count()
-        all_users = db.get_all_users()
-        
-        message = f"""
-📊 **إحصائيات المشرفين**
-
-👥 **المستخدمين:**
-• إجمالي المسجلين: {total_users}
-
-📈 **آخر 5 مسجلين:**
-"""
-        
-        for user in all_users[:5]:
-            message += f"• {user['full_name']} - {user['registration_date'].strftime('%Y-%m-%d')}\n"
-        
-        await update.message.reply_text(message)
-        
-    except Exception as e:
-        await update.message.reply_text("❌ حدث خطأ في عرض إحصائيات المشرفين")
 
 async def cancel(update: Update, context: CallbackContext) -> int:
     """إلغاء التسجيل"""
     await update.message.reply_text("❌ تم إلغاء التسجيل")
     return ConversationHandler.END
+
+async def error_handler(update: Update, context: CallbackContext):
+    """معالجة الأخطاء"""
+    logger.error(f"حدث خطأ: {context.error}")
 
 # ==============================
 # 🎪 التشغيل الرئيسي
@@ -301,14 +285,17 @@ def main():
         return
     
     # تهيئة قاعدة البيانات
-    if not db.init_db():
+    print("🔧 جارٍ تهيئة قاعدة البيانات...")
+    if db.init_db():
+        print("✅ تم تهيئة قاعدة البيانات بنجاح")
+    else:
         print("❌ فشل في تهيئة قاعدة البيانات")
         return
     
     # بدء خادم Flask
     flask_thread = threading.Thread(target=run_flask, daemon=True)
     flask_thread.start()
-    print("✅ خادم الويب يعمل")
+    print("✅ خادم الويب يعمل على المنفذ 5000")
     
     try:
         # إنشاء وتشغيل البوت
@@ -316,7 +303,7 @@ def main():
         
         # نظام المحادثة للتسجيل
         conv_handler = ConversationHandler(
-            entry_points=[CommandHandler('start', start)],
+            entry_points=[CommandHandler('start', start), CommandHandler('register', start)],
             states={
                 NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_name)],
                 PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_phone)],
@@ -329,20 +316,20 @@ def main():
         application.add_handler(conv_handler)
         application.add_handler(CommandHandler("profile", profile))
         application.add_handler(CommandHandler("stats", stats))
-        application.add_handler(CommandHandler("admin_stats", admin_stats))
-        application.add_handler(CommandHandler("register", start))
+        application.add_error_handler(error_handler)
         
         print("=" * 50)
         print("🤖 نظام التسجيل مع قاعدة البيانات يعمل بنجاح!")
+        print("🗃️ قاعدة بيانات: PostgreSQL (Render)")
         print("💰 مجاني تماماً!")
         print("⏰ 24/7 مستمر")
-        print("🗄️ يستخدم قاعدة بيانات PostgreSQL على Render")
         print("=" * 50)
         
+        # تشغيل البوت
         application.run_polling(drop_pending_updates=True)
         
     except Exception as e:
-        print(f"❌ خطأ: {e}")
+        print(f"❌ خطأ في تشغيل البوت: {e}")
 
 if __name__ == '__main__':
     main()
