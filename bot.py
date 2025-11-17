@@ -1,47 +1,55 @@
 import os
-import psycopg2
+from urllib.parse import urlparse
 
-print("🚀 بدء تشغيل البرنامج...")
+print("🚀 بدء البرنامج...")
 
-# الاتصال بقاعدة البيانات
 try:
+    # استيراد المكتبة
+    import pg8000
+    
+    # الحصول على رابط قاعدة البيانات
     DATABASE_URL = os.getenv('DATABASE_URL')
-    print("📊 جارٍ الاتصال بقاعدة البيانات...")
+    print("📊 تم الحصول على رابط قاعدة البيانات")
     
-    if DATABASE_URL.startswith('postgres://'):
-        DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
+    # تحليل الرابط
+    url = urlparse(DATABASE_URL)
     
-    conn = psycopg2.connect(DATABASE_URL, sslmode='require')
+    # إعداد بيانات الاتصال
+    conn_info = {
+        'host': url.hostname,
+        'port': url.port,
+        'user': url.username,
+        'password': url.password,
+        'database': url.path[1:],  # إزالة الـ / من البداية
+    }
+    
+    # الاتصال بقاعدة البيانات
+    conn = pg8000.connect(**conn_info)
     print("✅ تم الاتصال بقاعدة البيانات!")
     
     # إنشاء الجدول
-    cur = conn.cursor()
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS names (
-            id SERIAL PRIMARY KEY,
-            name TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
+    cursor = conn.cursor()
+    cursor.execute("CREATE TABLE IF NOT EXISTS names (id SERIAL PRIMARY KEY, name TEXT)")
     conn.commit()
     print("✅ تم إنشاء الجدول!")
     
-    # إدخال اسم "عمار عساف"
-    cur.execute("INSERT INTO names (name) VALUES ('عمار عساف')")
+    # إدخال اسم عمار عساف
+    cursor.execute("INSERT INTO names (name) VALUES ('عمار عساف')")
     conn.commit()
-    print("✅ تم إدخال اسم 'عمار عساف'!")
+    print("✅ تم إدخال الاسم: عمار عساف")
     
-    # عرض جميع الأسماء
-    cur.execute("SELECT * FROM names ORDER BY created_at DESC")
-    results = cur.fetchall()
+    # عرض البيانات
+    cursor.execute("SELECT * FROM names")
+    results = cursor.fetchall()
     
-    print("\n📋 الأسماء في قاعدة البيانات:")
-    print("=" * 40)
+    print("\n📋 البيانات في الجدول:")
+    print("=" * 30)
     for row in results:
-        print(f"ID: {row[0]} | الاسم: {row[1]} | التاريخ: {row[2]}")
-    print("=" * 40)
+        print(f"ID: {row[0]} | الاسم: {row[1]}")
+    print("=" * 30)
     
-    cur.close()
+    # إغلاق الاتصال
+    cursor.close()
     conn.close()
     print("🎉 تم الانتهاء بنجاح!")
     
