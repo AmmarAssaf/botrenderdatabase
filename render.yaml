@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: ammar-db-test
+    name: ammar-simple-db
     env: python
     plan: free
     buildCommand: "pip install -r requirements.txt"
@@ -10,5 +10,3 @@ services:
         fromDatabase:
           name: telegram-bot-db
           property: connectionString
-
-# لاحظ: لا نضيف قسم databases لأن القاعدة موجودة مسبقاً
