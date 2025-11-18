@@ -1,46 +1,35 @@
 import os
-from urllib.parse import urlparse
+import psycopg2
 
 print("🚀 بدء البرنامج...")
 
 try:
-    # استيراد المكتبة
-    import pg8000
-    
     # الحصول على رابط قاعدة البيانات
     DATABASE_URL = os.getenv('DATABASE_URL')
     print("📊 تم الحصول على رابط قاعدة البيانات")
     
-    # تحليل الرابط
-    url = urlparse(DATABASE_URL)
-    
-    # إعداد بيانات الاتصال
-    conn_info = {
-        'host': url.hostname,
-        'port': url.port,
-        'user': url.username,
-        'password': url.password,
-        'database': url.path[1:],  # إزالة الـ / من البداية
-    }
+    # تحويل الرابط ليكون متوافقاً
+    if DATABASE_URL.startswith('postgres://'):
+        DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
     
     # الاتصال بقاعدة البيانات
-    conn = pg8000.connect(**conn_info)
+    conn = psycopg2.connect(DATABASE_URL, sslmode='require')
     print("✅ تم الاتصال بقاعدة البيانات!")
     
     # إنشاء الجدول
-    cursor = conn.cursor()
-    cursor.execute("CREATE TABLE IF NOT EXISTS names (id SERIAL PRIMARY KEY, name TEXT)")
+    cur = conn.cursor()
+    cur.execute("CREATE TABLE IF NOT EXISTS names (id SERIAL PRIMARY KEY, name TEXT)")
     conn.commit()
     print("✅ تم إنشاء الجدول!")
     
     # إدخال اسم عمار عساف
-    cursor.execute("INSERT INTO names (name) VALUES ('عمار عساف')")
+    cur.execute("INSERT INTO names (name) VALUES (%s)", ("عمار عساف",))
     conn.commit()
     print("✅ تم إدخال الاسم: عمار عساف")
     
     # عرض البيانات
-    cursor.execute("SELECT * FROM names")
-    results = cursor.fetchall()
+    cur.execute("SELECT * FROM names")
+    results = cur.fetchall()
     
     print("\n📋 البيانات في الجدول:")
     print("=" * 30)
@@ -49,7 +38,7 @@ try:
     print("=" * 30)
     
     # إغلاق الاتصال
-    cursor.close()
+    cur.close()
     conn.close()
     print("🎉 تم الانتهاء بنجاح!")
     
