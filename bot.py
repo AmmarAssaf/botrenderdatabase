@@ -1,57 +1,55 @@
 import os
-from urllib.parse import urlparse
+from sqlalchemy import create_engine, text
 
-print("🚀 بدء البرنامج...")
+print("🚀 بدء تشغيل البرنامج...")
 
 try:
-    # استيراد المكتبة
-    import pg8000
-    
     # الحصول على رابط قاعدة البيانات
     DATABASE_URL = os.getenv('DATABASE_URL')
-    print("📊 تم الحصول على رابط قاعدة البيانات")
     
-    # تحليل الرابط
-    url = urlparse(DATABASE_URL)
-    
-    # إعداد بيانات الاتصال
-    conn_info = {
-        'host': url.hostname,
-        'port': url.port,
-        'user': url.username,
-        'password': url.password,
-        'database': url.path[1:],  # إزالة الـ / من البداية
-    }
-    
-    # الاتصال بقاعدة البيانات
-    conn = pg8000.connect(**conn_info)
-    print("✅ تم الاتصال بقاعدة البيانات!")
-    
-    # إنشاء الجدول
-    cursor = conn.cursor()
-    cursor.execute("CREATE TABLE IF NOT EXISTS names (id SERIAL PRIMARY KEY, name TEXT)")
-    conn.commit()
-    print("✅ تم إنشاء الجدول!")
-    
-    # إدخال اسم عمار عساف
-    cursor.execute("INSERT INTO names (name) VALUES ('عمار عساف')")
-    conn.commit()
-    print("✅ تم إدخال الاسم: عمار عساف")
-    
-    # عرض البيانات
-    cursor.execute("SELECT * FROM names")
-    results = cursor.fetchall()
-    
-    print("\n📋 البيانات في الجدول:")
-    print("=" * 30)
-    for row in results:
-        print(f"ID: {row[0]} | الاسم: {row[1]}")
-    print("=" * 30)
-    
-    # إغلاق الاتصال
-    cursor.close()
-    conn.close()
-    print("🎉 تم الانتهاء بنجاح!")
-    
+    if DATABASE_URL:
+        print("📊 تم العثور على رابط قاعدة البيانات")
+        
+        # تحويل الرابط ليكون متوافقاً مع SQLAlchemy
+        if DATABASE_URL.startswith('postgres://'):
+            DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
+        
+        # إنشاء محرك قاعدة البيانات
+        engine = create_engine(DATABASE_URL)
+        
+        # الاتصال والتشغيل
+        with engine.connect() as connection:
+            print("✅ تم الاتصال بقاعدة البيانات!")
+            
+            # إنشاء الجدول
+            connection.execute(text("""
+                CREATE TABLE IF NOT EXISTS names (
+                    id SERIAL PRIMARY KEY,
+                    name VARCHAR(100) NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            connection.commit()
+            print("✅ تم إنشاء الجدول!")
+            
+            # إدخال اسم عمار عساف
+            connection.execute(text("INSERT INTO names (name) VALUES (:name)"), {"name": "عمار عساف"})
+            connection.commit()
+            print("✅ تم إدخال الاسم: عمار عساف")
+            
+            # عرض جميع الأسماء
+            result = connection.execute(text("SELECT * FROM names ORDER BY created_at DESC"))
+            names = result.fetchall()
+            
+            print("\n📋 الأسماء في قاعدة البيانات:")
+            print("=" * 50)
+            for name in names:
+                print(f"ID: {name[0]} | الاسم: {name[1]} | التاريخ: {name[2]}")
+            print("=" * 50)
+            
+        print("🎉 تم الانتهاء بنجاح!")
+    else:
+        print("❌ لم يتم العثور على رابط قاعدة البيانات")
+        
 except Exception as e:
     print(f"❌ حدث خطأ: {e}")
