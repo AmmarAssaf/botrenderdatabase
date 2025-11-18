@@ -6,7 +6,7 @@ services:
     buildCommand: "pip install -r requirements.txt"
     startCommand: "python bot.py"
     envVars:
-      - key: DATABASE_URL
+      - key: postgresql://botuser:wvFYbKZY2fLHzxuMIGuIMAcV9ZZTm3dS@dpg-d477doali9vc738hh5fg-a/telegrambotdb_r7m4
         fromDatabase:
           name: botuser
           property: connectionString
