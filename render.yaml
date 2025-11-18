@@ -8,5 +8,5 @@ services:
     envVars:
       - key: postgresql://botuser:wvFYbKZY2fLHzxuMIGuIMAcV9ZZTm3dS@dpg-d477doali9vc738hh5fg-a/telegrambotdb_r7m4
         fromDatabase:
-          name: botuser
+          name: telegram-bot-db
           property: connectionString
