@@ -11,6 +11,4 @@ services:
           name: telegram-bot-db
           property: connectionString
 
-databases:
-  - name: telegram-bot-db
-    plan: free
+# ⚠️ لا تضيف قسم databases هنا ⚠️
