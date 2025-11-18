@@ -1,5 +1,5 @@
 import os
-import psycopg2
+import psycopg2-binary
 
 print("🚀 بدء البرنامج...")
 
